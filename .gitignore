@@ -3,11 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyd
 
-# Virtual environment
+# Virtual environments
 .venv/
 venv/
 env/
+ENV/
 
 # Environment files
 .env
@@ -17,7 +19,7 @@ env/
 # Logs
 *.log
 
-# FastAPI / Python cache
+# Testing / cache
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -28,6 +30,13 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# FastAPI / local runtime
+data/
+*.sqlite
+*.db
 
 # IDE
 .vscode/
@@ -37,5 +46,7 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Railway / local runtime
+# Railway / Vercel / misc
+.vercel/
+.railway/
 .python-version
