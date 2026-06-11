@@ -80,32 +80,38 @@ def run_onboarding(user_input: dict) -> dict:
     }
 
 
+def _chat_fallback(user_id: str, message: str) -> dict:
+    """Fallback chat using simple coach_node graph."""
+    graph = build_graph()
+    graph.set_entry_point("intake")
+    graph.add_edge("intake", "coach")
+    graph.add_edge("coach", END)
+    app = graph.compile()
+    state: HealthState = {
+        "user_id": user_id,
+        "input": {"message": message},
+        "messages": [],
+        "profile": store.get_profile(user_id),
+        "plan": store.get_plan(user_id),
+        "logs": store.get_logs(user_id),
+        "memory": store.get_memory(user_id),
+        "output": {},
+    }
+    result = app.invoke(state)
+    return result.get("output", {"reply": "Service temporarily unavailable."})
+
+
 def run_chat(user_input: dict) -> dict:
     """Run the daily coach chat using the new CoachAgent (ReAct + tools).
     Falls back to simple coach_node if coach_agent is unavailable."""
-    if not _COACH_AGENT_AVAILABLE:
-        user_id = user_input.get("user_id", "")
-        message = user_input.get("message", "")
-        graph = build_graph()
-        graph.set_entry_point("intake")
-        graph.add_edge("intake", "coach")
-        graph.add_edge("coach", END)
-        app = graph.compile()
-        state: HealthState = {
-            "user_id": user_id,
-            "input": {"message": message},
-            "messages": [],
-            "profile": store.get_profile(user_id),
-            "plan": store.get_plan(user_id),
-            "logs": store.get_logs(user_id),
-            "memory": store.get_memory(user_id),
-            "output": {},
-        }
-        result = app.invoke(state)
-        return result.get("output", {"reply": "Service temporarily unavailable."})
     user_id = user_input.get("user_id", "")
     message = user_input.get("message", "")
-    return run_coach_agent(user_id, message)
+    if _COACH_AGENT_AVAILABLE:
+        try:
+            return run_coach_agent(user_id, message)
+        except Exception:
+            pass
+    return _chat_fallback(user_id, message)
 
 
 def run_coach(user_input: dict) -> dict:
@@ -115,11 +121,14 @@ def run_coach(user_input: dict) -> dict:
     Input: {"user_id": "...", "message": "..."}
     Output: {"reply": "...", "action": "...", "data": {...}}
     """
-    if not _COACH_AGENT_AVAILABLE:
-        return run_chat(user_input)
     user_id = user_input.get("user_id", "")
     message = user_input.get("message", "")
-    return run_coach_agent(user_id, message)
+    if _COACH_AGENT_AVAILABLE:
+        try:
+            return run_coach_agent(user_id, message)
+        except Exception:
+            pass
+    return _chat_fallback(user_id, message)
 
 
 def run_daily_log(user_input: dict) -> dict:

@@ -125,6 +125,12 @@ def run_coach_agent(user_id: str, message: str) -> dict:
     Returns:
         {"reply": str, "action": str, "data": dict}
     """
+    if not _LANGGRAPH_AVAILABLE or not _DEEPSEEK_AVAILABLE:
+        raise ImportError(
+            "Coach agent requires langgraph.prebuilt and langchain-deepseek. "
+            "Install with: pip install langgraph-prebuilt langchain-deepseek"
+        )
+
     # 1. Load recent chat history for context
     chat_msgs = db.get_messages(user_id, limit=20)
     history_str = ""
