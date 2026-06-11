@@ -139,15 +139,21 @@ async def onboarding(req: OnboardingRequest):
 @app.post("/agent/chat")
 async def chat(req: ChatRequest):
     """Daily coach chat: message → intake → coach reply."""
-    result = run_chat(req.model_dump())
-    return result
+    try:
+        result = run_chat(req.model_dump())
+        return result
+    except Exception as e:
+        return {"reply": f"Service error: {str(e)[:200]}", "action": "error"}
 
 
 @app.post("/agent/coach")
 async def coach(req: CoachRequest):
     """Main coach agent: full tool-calling agent with Supabase persistence."""
-    result = _get_run_coach()(req.model_dump())
-    return result
+    try:
+        result = _get_run_coach()(req.model_dump())
+        return result
+    except Exception as e:
+        return {"reply": f"Service error: {str(e)[:200]}", "action": "error"}
 
 
 @app.post("/agent/daily-log")
