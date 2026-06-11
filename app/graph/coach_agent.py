@@ -12,14 +12,22 @@ from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 # Optional imports - gracefully degrade if not installed
+# langgraph >=0.3 moved prebuilt to separate package "langgraph-prebuilt"
+create_react_agent = None
+CompiledStateGraph = None
+_LANGGRAPH_AVAILABLE = False
+
 try:
-    from langgraph.prebuilt import create_react_agent
-    from langgraph.graph.state import CompiledStateGraph
+    from langgraph.prebuilt import create_react_agent  # noqa: F811
+    from langgraph.graph.state import CompiledStateGraph  # noqa: F811
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
-    _LANGGRAPH_AVAILABLE = False
-    CompiledStateGraph = None
-    create_react_agent = None
+    try:
+        from langgraph_prebuilt import create_react_agent  # noqa: F811
+        from langgraph.graph.state import CompiledStateGraph  # noqa: F811
+        _LANGGRAPH_AVAILABLE = True
+    except ImportError:
+        pass
 
 try:
     from langchain_deepseek import ChatDeepSeek
