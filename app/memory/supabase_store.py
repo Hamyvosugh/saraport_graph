@@ -12,10 +12,24 @@ load_dotenv(dotenv_path=".env", override=False)
 
 
 def _get_supabase() -> Client:
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "") or os.getenv("SUPABASE_ANON_KEY", "")
+    url = (
+        os.getenv("SUPABASE_URL", "")
+        or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+    )
+    key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        or os.getenv("SUPABASE_ANON_KEY", "")
+        or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    )
     if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required")
+        # Try printing env var names for debugging
+        env_vars = {k: v[:10] + "..." if v and len(v) > 10 else v
+                    for k, v in os.environ.items()
+                    if "SUPABASE" in k.upper() or "SUPA" in k.upper()}
+        raise RuntimeError(
+            f"SUPABASE_URL/SERVICE_ROLE_KEY required. "
+            f"Found env vars with SUPABASE: {list(env_vars.keys())}"
+        )
     return create_client(url, key)
 
 

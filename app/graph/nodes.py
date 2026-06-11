@@ -4,19 +4,33 @@ import json
 import re
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
-from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage
 from app.memory.store import store
 from app.graph.state import HealthState
 
+# Optional LLM imports - gracefully degrade
+try:
+    from langchain_deepseek import ChatDeepSeek
+    _DEEPSEEK_AVAILABLE = True
+except ImportError:
+    _DEEPSEEK_AVAILABLE = False
+    ChatDeepSeek = None
 
-def _llm() -> ChatDeepSeek:
+
+def _llm():
+    """Create DeepSeek LLM instance, or return None if unavailable."""
+    if not _DEEPSEEK_AVAILABLE:
+        return None
     import os
-    # Auto-load from DEEPSEEK_API_KEY in env.local or os.environ
     from dotenv import load_dotenv
     load_dotenv(dotenv_path=".env.local", override=False)
     load_dotenv(dotenv_path=".env", override=False)
-    return ChatDeepSeek(model="deepseek-chat", temperature=0.7)
+    if not os.getenv("DEEPSEEK_API_KEY"):
+        return None
+    try:
+        return ChatDeepSeek(model="deepseek-chat", temperature=0.7)
+    except Exception:
+        return None
 
 
 def _extract_numbers(text: str) -> list[int]:
@@ -139,12 +153,15 @@ User memory summary: {memory.get('summary', 'none')}.
 Detected from last message: {detected}.
 Reply concisely (2-4 sentences). Acknowledge what the user shared, give brief feedback, and suggest one small next action."""
 
-    try:
-        llm = _llm()
-        response = llm.invoke([HumanMessage(content=context + f"\n\nUser: {msg}\nCoach:")])
-        reply = response.content
-    except Exception:
-        reply = f"Thanks for sharing! Based on your plan (target {plan.get('calories','?')} cal), keep going. How about a 10-min walk after your next meal?"
+    llm = _llm()
+    if llm is not None:
+        try:
+            response = llm.invoke([HumanMessage(content=context + f"\n\nUser: {msg}\nCoach:")])
+            reply = response.content
+        except Exception:
+            reply = f"Thanks for sharing! Keep going on your journey. How about logging your next meal? 🍽️"
+    else:
+        reply = f"Thanks for sharing! Keep going on your journey. How about logging your next meal? 🍽️"
 
     state["output"] = {  # type: ignore[index]
         "reply": reply,
