@@ -13,7 +13,14 @@ from app.graph.nodes import (
     food_breakdown_resolve_node,
 )
 from app.memory.store import store
-from app.graph.coach_agent import run_coach_agent
+
+# Optional import: coach_agent may fail if langgraph packages aren't installed
+try:
+    from app.graph.coach_agent import run_coach_agent
+    _COACH_AGENT_AVAILABLE = True
+except ImportError:
+    _COACH_AGENT_AVAILABLE = False
+    run_coach_agent = None
 
 
 def build_graph() -> StateGraph:
@@ -74,7 +81,28 @@ def run_onboarding(user_input: dict) -> dict:
 
 
 def run_chat(user_input: dict) -> dict:
-    """Run the daily coach chat using the new CoachAgent (ReAct + tools)."""
+    """Run the daily coach chat using the new CoachAgent (ReAct + tools).
+    Falls back to simple coach_node if coach_agent is unavailable."""
+    if not _COACH_AGENT_AVAILABLE:
+        user_id = user_input.get("user_id", "")
+        message = user_input.get("message", "")
+        graph = build_graph()
+        graph.set_entry_point("intake")
+        graph.add_edge("intake", "coach")
+        graph.add_edge("coach", END)
+        app = graph.compile()
+        state: HealthState = {
+            "user_id": user_id,
+            "input": {"message": message},
+            "messages": [],
+            "profile": store.get_profile(user_id),
+            "plan": store.get_plan(user_id),
+            "logs": store.get_logs(user_id),
+            "memory": store.get_memory(user_id),
+            "output": {},
+        }
+        result = app.invoke(state)
+        return result.get("output", {"reply": "Service temporarily unavailable."})
     user_id = user_input.get("user_id", "")
     message = user_input.get("message", "")
     return run_coach_agent(user_id, message)
@@ -82,10 +110,13 @@ def run_chat(user_input: dict) -> dict:
 
 def run_coach(user_input: dict) -> dict:
     """Run the full coach agent flow with Supabase persistence.
+    Falls back to simple coach_node if coach_agent is unavailable.
 
     Input: {"user_id": "...", "message": "..."}
     Output: {"reply": "...", "action": "...", "data": {...}}
     """
+    if not _COACH_AGENT_AVAILABLE:
+        return run_chat(user_input)
     user_id = user_input.get("user_id", "")
     message = user_input.get("message", "")
     return run_coach_agent(user_id, message)

@@ -8,11 +8,25 @@ Uses DeepSeek LLM + tools (from tools.py) to:
 
 import os
 from typing import Optional
-from langgraph.prebuilt import create_react_agent
-from langgraph.graph.state import CompiledStateGraph
-from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
+
+# Optional imports - gracefully degrade if not installed
+try:
+    from langgraph.prebuilt import create_react_agent
+    from langgraph.graph.state import CompiledStateGraph
+    _LANGGRAPH_AVAILABLE = True
+except ImportError:
+    _LANGGRAPH_AVAILABLE = False
+    CompiledStateGraph = None
+    create_react_agent = None
+
+try:
+    from langchain_deepseek import ChatDeepSeek
+    _DEEPSEEK_AVAILABLE = True
+except ImportError:
+    _DEEPSEEK_AVAILABLE = False
+    ChatDeepSeek = None
 
 from app.graph.tools import ALL_TOOLS
 from app.memory.supabase_store import store as db
@@ -70,13 +84,17 @@ You are the core intelligence of Saraport. Be the best health coach you can be!
 """
 
 
-def _get_llm() -> ChatDeepSeek:
-    """Create DeepSeek LLM instance."""
+def _get_llm():
+    """Create DeepSeek LLM instance, with graceful fallback."""
+    if not _DEEPSEEK_AVAILABLE:
+        raise ImportError("langchain-deepseek package not installed")
     return ChatDeepSeek(model="deepseek-chat", temperature=0.7)
 
 
 def build_coach_agent():
     """Build a LangGraph prebuilt ReAct agent with coaching tools."""
+    if not _LANGGRAPH_AVAILABLE:
+        raise ImportError("langgraph.prebuilt package not installed")
     model = _get_llm()
     return create_react_agent(model=model, tools=ALL_TOOLS)
 
@@ -84,10 +102,10 @@ def build_coach_agent():
 # ---------------------------------------------------------------------------
 # Singleton agent (lazy init)
 # ---------------------------------------------------------------------------
-_agent: Optional[CompiledStateGraph] = None
+_agent: object = None
 
 
-def get_agent() -> CompiledStateGraph:
+def get_agent():
     global _agent
     if _agent is None:
         _agent = build_coach_agent()
