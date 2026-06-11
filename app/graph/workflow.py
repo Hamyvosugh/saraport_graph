@@ -81,24 +81,35 @@ def run_onboarding(user_input: dict) -> dict:
 
 
 def _chat_fallback(user_id: str, message: str) -> dict:
-    """Fallback chat using simple coach_node graph."""
-    graph = build_graph()
-    graph.set_entry_point("intake")
-    graph.add_edge("intake", "coach")
-    graph.add_edge("coach", END)
-    app = graph.compile()
-    state: HealthState = {
-        "user_id": user_id,
-        "input": {"message": message},
-        "messages": [],
-        "profile": store.get_profile(user_id),
-        "plan": store.get_plan(user_id),
-        "logs": store.get_logs(user_id),
-        "memory": store.get_memory(user_id),
-        "output": {},
+    """Fallback chat using simple coach_node graph.
+    Catches all exceptions to always return a valid response."""
+    try:
+        graph = build_graph()
+        graph.set_entry_point("intake")
+        graph.add_edge("intake", "coach")
+        graph.add_edge("coach", END)
+        app = graph.compile()
+        state: HealthState = {
+            "user_id": user_id,
+            "input": {"message": message},
+            "messages": [],
+            "profile": store.get_profile(user_id),
+            "plan": store.get_plan(user_id),
+            "logs": store.get_logs(user_id),
+            "memory": store.get_memory(user_id),
+            "output": {},
+        }
+        result = app.invoke(state)
+        output = result.get("output", {})
+        if output and output.get("reply"):
+            return output
+    except Exception:
+        pass
+    return {
+        "reply": "سلام! من در حال حاضر در دسترس نیستم. لطفاً اطلاعات غذایی خود را از بخش ثبت غذا وارد کنید. 🍽️",
+        "action": "chat",
+        "data": {},
     }
-    result = app.invoke(state)
-    return result.get("output", {"reply": "Service temporarily unavailable."})
 
 
 def run_chat(user_input: dict) -> dict:
