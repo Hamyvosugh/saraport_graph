@@ -14,12 +14,25 @@ load_dotenv(dotenv_path=".env", override=False)
 from app.graph.workflow import (
     run_onboarding,
     run_chat,
-    run_coach,
     run_daily_log,
     run_food_analysis,
     run_food_breakdown,
     run_food_breakdown_resolve,
 )
+
+# Lazy import for run_coach to handle missing dependencies gracefully
+_run_coach = None
+
+def _get_run_coach():
+    global _run_coach
+    if _run_coach is None:
+        try:
+            from app.graph.workflow import run_coach as rc
+            _run_coach = rc
+        except ImportError:
+            from app.graph.workflow import run_chat as rc
+            _run_coach = rc
+    return _run_coach
 from app.memory.supabase_store import store
 
 app = FastAPI(
@@ -133,7 +146,7 @@ async def chat(req: ChatRequest):
 @app.post("/agent/coach")
 async def coach(req: CoachRequest):
     """Main coach agent: full tool-calling agent with Supabase persistence."""
-    result = run_coach(req.model_dump())
+    result = _get_run_coach()(req.model_dump())
     return result
 
 
