@@ -9,8 +9,11 @@ from app.graph.nodes import (
     food_vision_node,
     progress_node,
     memory_node,
+    food_breakdown_node,
+    food_breakdown_resolve_node,
 )
 from app.memory.store import store
+from app.graph.coach_agent import run_coach_agent
 
 
 def build_graph() -> StateGraph:
@@ -24,6 +27,7 @@ def build_graph() -> StateGraph:
     graph.add_node("food_vision", food_vision_node)
     graph.add_node("progress", progress_node)
     graph.add_node("memory", memory_node)
+    graph.add_node("food_breakdown", food_breakdown_node)
 
     # Edges: depends on the workflow type
     # We'll route conditionally in the compiled graph
@@ -70,26 +74,21 @@ def run_onboarding(user_input: dict) -> dict:
 
 
 def run_chat(user_input: dict) -> dict:
-    """Run the daily coach flow: intake → coach → memory → END"""
-    graph = build_graph()
-    graph.add_edge("intake", "coach")
-    graph.set_entry_point("intake")
-    graph.add_edge("coach", "memory")
-    graph.add_edge("memory", END)
+    """Run the daily coach chat using the new CoachAgent (ReAct + tools)."""
+    user_id = user_input.get("user_id", "")
+    message = user_input.get("message", "")
+    return run_coach_agent(user_id, message)
 
-    app = graph.compile()
-    state: HealthState = {
-        "user_id": user_input.get("user_id", ""),
-        "input": user_input,
-        "messages": [],
-        "profile": {},
-        "plan": {},
-        "logs": [],
-        "memory": {},
-        "output": {},
-    }
-    result = app.invoke(state)
-    return result.get("output", {})
+
+def run_coach(user_input: dict) -> dict:
+    """Run the full coach agent flow with Supabase persistence.
+
+    Input: {"user_id": "...", "message": "..."}
+    Output: {"reply": "...", "action": "...", "data": {...}}
+    """
+    user_id = user_input.get("user_id", "")
+    message = user_input.get("message", "")
+    return run_coach_agent(user_id, message)
 
 
 def run_daily_log(user_input: dict) -> dict:
@@ -132,6 +131,63 @@ def run_food_analysis(user_input: dict) -> dict:
         "logs": [],
         "memory": {},
         "output": {},
+    }
+    result = app.invoke(state)
+    return result.get("output", {})
+
+
+def run_food_breakdown(user_input: dict) -> dict:
+    """Run the AI food breakdown flow: intake → food_breakdown → END
+    
+    Input: {"user_id": "...", "text": "what the user ate"}
+    Output: auto-saves to DB, returns summary or pending_questions
+    """
+    graph = build_graph()
+    graph.set_entry_point("intake")
+    graph.add_edge("intake", "food_breakdown")
+    graph.add_edge("food_breakdown", END)
+
+    app = graph.compile()
+    state: HealthState = {
+        "user_id": user_input.get("user_id", ""),
+        "input": user_input,
+        "messages": [],
+        "profile": {},
+        "plan": {},
+        "logs": [],
+        "memory": {},
+        "output": {},
+    }
+    result = app.invoke(state)
+    output = result.get("output", {})
+    # If there are pending questions, include them
+    if result.get("pending_questions"):
+        output["pending_questions"] = result.get("pending_questions")
+    return output
+
+
+def run_food_breakdown_resolve(user_input: dict) -> dict:
+    """Resolve pending food ambiguity from user's choices.
+    
+    Input: {"user_id": "...", "choices": [{"food_index": 0, "selected_food_id": "uuid"}], "text": "..."}
+    """
+    graph = build_graph()
+    graph.add_node("food_breakdown_resolve", food_breakdown_resolve_node)
+    graph.set_entry_point("intake")
+    graph.add_edge("intake", "food_breakdown_resolve")
+    graph.add_edge("food_breakdown_resolve", END)
+
+    app = graph.compile()
+    state: HealthState = {
+        "user_id": user_input.get("user_id", ""),
+        "input": user_input,
+        "messages": [],
+        "profile": {},
+        "plan": {},
+        "logs": [],
+        "memory": {},
+        "output": {},
+        "pending_questions": user_input.get("pending_questions", []),
     }
     result = app.invoke(state)
     return result.get("output", {})
